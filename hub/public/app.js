@@ -147,5 +147,7 @@
     connect();
   } else {
     setStatus("입장 전");
+    const code = new URLSearchParams(location.search).get("code");
+    if (code) $("school-code").value = code.toUpperCase();
   }
 })();

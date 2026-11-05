@@ -168,7 +168,30 @@ function publicCall(c) {
   return { id: c.id, room: c.room, by: c.by, role: c.role, at: c.at, drill: c.drill, ackedCount: c.acked.size };
 }
 
+function localIPv4() {
+  const os = require("os");
+  const found = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const n of list || []) {
+      if (n.family === "IPv4" && !n.internal && isPrivateAddress(n.address)) found.push(n.address);
+    }
+  }
+  return found;
+}
+
 server.listen(PORT, "0.0.0.0", () => {
-  console.log("비상호출 중계 서버 시작: 포트", PORT);
-  console.log("같은 학교 와이파이의 기기에서 http://<이 PC의 IP>:" + PORT + " 으로 접속하세요.");
+  const ips = localIPv4();
+  const schools = loadSchools().schools;
+  console.log("");
+  console.log("=== 비상호출 중계 서버가 시작되었습니다 ===");
+  console.log("이 창을 닫으면 서버가 꺼집니다. 열어 두십시오.");
+  console.log("");
+  if (!schools.length) console.log("아직 등록된 학교가 없습니다. 관리자 안내를 따라 학교를 먼저 등록하세요.");
+  for (const s of schools) {
+    for (const ip of (ips.length ? ips : ["(IP 확인 불가)"])) {
+      console.log("[" + s.name + "] 선생님 접속 링크: http://" + ip + ":" + PORT + "/?code=" + s.code);
+    }
+  }
+  console.log("");
+  console.log("위 링크를 학교 선생님들께 전달하세요. 같은 학교 와이파이에서만 열립니다.");
 });
