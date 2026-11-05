@@ -41,6 +41,23 @@
     }
   }
 
+  // ---------- 화면 꺼짐 방지 ----------
+  let wakeLock = null;
+  async function keepAwake() {
+    if (!("wakeLock" in navigator)) return;
+    if (!$("keep-awake").checked || !state.session || document.visibilityState !== "visible") return releaseWake();
+    if (wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch (e) { wakeLock = null; }
+  }
+  function releaseWake() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  document.addEventListener("visibilitychange", keepAwake);
+  $("keep-awake").addEventListener("change", keepAwake);
+
   // ---------- 알람 화면 ----------
   function showAlarm(title, detail, drill) {
     $("alarm-title").textContent = (drill ? "[훈련] " : "") + title;
@@ -112,6 +129,7 @@
     $("call-panel").classList.remove("hidden");
     $("settings-panel").classList.remove("hidden");
     $("who").textContent = state.session.schoolName + " · " + state.session.room + " · " + state.session.name + " 님 (" + state.session.role + ")";
+    keepAwake();
   }
 
   async function join() {
