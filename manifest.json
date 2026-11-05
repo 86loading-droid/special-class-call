@@ -1,0 +1,10 @@
+{
+  "name": "특수학급 비상호출",
+  "short_name": "비상호출",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#1d4ed8",
+  "lang": "ko",
+  "icons": []
+}
