@@ -2,7 +2,11 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const KEY = "scc-session";
-  const state = { session: null, es: null, activeCallId: null, repeatTimer: null, audioCtx: null };
+  const POLL_MS = 1500;
+  const state = {
+    session: null, activeCallId: null, lastSeenCallId: null,
+    ackedIds: new Set(), repeatTimer: null, pollTimer: null, audioCtx: null
+  };
 
   function setStatus(t) { $("status").textContent = t; }
   function log(t) {
@@ -58,27 +62,40 @@
   }
   function stopRepeat() { if (state.repeatTimer) clearInterval(state.repeatTimer); state.repeatTimer = null; }
 
-  // ---------- 실시간 수신 ----------
-  function connect() {
-    if (state.es) state.es.close();
-    const es = new EventSource("/api/events?token=" + encodeURIComponent(state.session.token));
-    state.es = es;
-    es.onopen = () => setStatus(state.session.schoolName + " · 연결됨");
-    es.onerror = () => setStatus("연결 끊김, 다시 연결 중");
-    es.addEventListener("call", (e) => onCall(JSON.parse(e.data)));
-    es.addEventListener("ack", (e) => {
-      const d = JSON.parse(e.data);
-      if (d.callId === state.activeCallId) log(d.by + " 확인 (" + d.acked + "명)");
-    });
-  }
+  // ---------- 호출 수신 (1.5초마다 확인) ----------
   function onCall(c) {
-    if (state.activeCallId === c.id) return;
+    if (state.ackedIds.has(c.id)) return;
     state.activeCallId = c.id;
     showAlarm(c.room + " 비상 호출", c.by + "(" + c.role + ") · " + new Date(c.at).toLocaleTimeString("ko-KR"), c.drill);
     log((c.drill ? "훈련 " : "") + c.room + " 호출 수신");
     playSound();
     startRepeat(c.id);
   }
+
+  async function poll() {
+    if (!state.session) return;
+    try {
+      const r = await fetch("/api/state?token=" + encodeURIComponent(state.session.token), { cache: "no-store" });
+      if (r.status === 401) {
+        localStorage.removeItem(KEY);
+        state.session = null;
+        stopPolling();
+        setStatus("다시 입장해 주세요");
+        location.reload();
+        return;
+      }
+      const d = await r.json();
+      setStatus(state.session.schoolName + " · 연결됨");
+      if (d.call && d.call.id !== state.lastSeenCallId) {
+        state.lastSeenCallId = d.call.id;
+        onCall(d.call);
+      }
+    } catch (e) {
+      setStatus("연결 끊김, 다시 연결 중");
+    }
+  }
+  function startPolling() { stopPolling(); poll(); state.pollTimer = setInterval(poll, POLL_MS); }
+  function stopPolling() { if (state.pollTimer) clearInterval(state.pollTimer); state.pollTimer = null; }
 
   // ---------- 요청 ----------
   async function post(path, body) {
@@ -112,7 +129,7 @@
     localStorage.setItem(KEY, JSON.stringify(r.data));
     ctx();
     showMain();
-    connect();
+    startPolling();
     log("입장: " + r.data.schoolName + " " + r.data.room);
   }
 
@@ -123,10 +140,14 @@
 
   async function ack() {
     if (!state.activeCallId) return hideAlarm();
-    const r = await post("/api/ack", { callId: state.activeCallId });
+    const id = state.activeCallId;
+    const r = await post("/api/ack", { callId: id });
     if (r.ok) {
-      state.activeCallId = null; stopRepeat(); hideAlarm();
-      log("확인 완료");
+      state.ackedIds.add(id);
+      state.activeCallId = null;
+      stopRepeat();
+      hideAlarm();
+      log("확인 완료 (지금까지 " + r.data.ackedCount + "명)");
     } else {
       log("확인 실패: " + (r.data.error || r.status));
     }
@@ -144,7 +165,7 @@
   if (saved) {
     state.session = JSON.parse(saved);
     showMain();
-    connect();
+    startPolling();
   } else {
     setStatus("입장 전");
     const code = new URLSearchParams(location.search).get("code");
