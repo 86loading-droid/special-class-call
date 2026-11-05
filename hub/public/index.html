@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d4ed8">
+  <title>특수학급 비상호출</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>특수학급 비상호출</h1>
+    <span id="status" class="status">준비 중</span>
+  </header>
+
+  <main>
+    <section id="join-panel" class="card">
+      <h2>입장</h2>
+      <p class="hint">학교 코드를 입력하세요. 학교 안 와이파이에서만 접속할 수 있습니다.</p>
+      <label>학교 코드 <input id="school-code" autocapitalize="characters" placeholder="예: ABC123"></label>
+      <label>이름 <input id="user-name" autocomplete="name"></label>
+      <label>역할
+        <select id="user-role">
+          <option value="특수교사">특수교사</option>
+          <option value="보조인력">보조인력</option>
+          <option value="관리자">관리자</option>
+        </select>
+      </label>
+      <label>교실 <input id="room" placeholder="예: 1학년 1반"></label>
+      <button id="join-btn" class="primary">입장</button>
+      <p id="join-error" class="error hidden"></p>
+    </section>
+
+    <section id="call-panel" class="card hidden">
+      <p id="who" class="hint"></p>
+      <button id="call-btn" class="call-button" aria-label="비상 호출">비상 호출</button>
+      <button id="drill-btn" class="secondary">모의 훈련 호출</button>
+      <p class="hint">누르면 같은 학교에 접속한 모든 기기에 알람이 울립니다. 확인 버튼을 누를 때까지 반복됩니다.</p>
+      <div id="log" class="log" aria-live="polite"></div>
+    </section>
+
+    <section id="settings-panel" class="card hidden">
+      <h2>알람 설정</h2>
+      <label>알람음
+        <select id="sound-choice">
+          <option value="beep">기본 경고음</option>
+          <option value="chime">부드러운 차임</option>
+        </select>
+      </label>
+      <label>소리 크기 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+      <label class="check"><input id="visual-on" type="checkbox" checked> 화면 깜빡임(시각 경고) 켜기</label>
+      <label class="check"><input id="sound-on" type="checkbox" checked> 소리(청각 경고) 켜기</label>
+      <button id="test-alarm" class="secondary">알람 미리 듣기</button>
+    </section>
+  </main>
+
+  <div id="alarm" class="alarm hidden" role="alertdialog" aria-live="assertive">
+    <div class="alarm-text">
+      <p id="alarm-title">비상 호출</p>
+      <p id="alarm-detail"></p>
+    </div>
+    <button id="ack-btn" class="ack">확인했습니다</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
