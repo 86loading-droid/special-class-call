@@ -5,6 +5,9 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PublicDir = Join-Path $Root 'public'
 $DataFile = Join-Path $Root 'schools.json'
 $Port = 8080
+$TunnelExe = Join-Path $Root 'cloudflared.exe'
+$TunnelPidFile = Join-Path $Root 'tunnel.pid'
+$TunnelLog = Join-Path $Root 'tunnel.log'
 $CallTtlMs = 10 * 60 * 1000
 
 $Sessions = @{}
@@ -87,7 +90,8 @@ function Handle($ctx) {
     $req = $ctx.Request
     $res = $ctx.Response
     $ip = ([string]$req.RemoteEndPoint.Address.IPAddressToString) -replace '^::ffff:', ''
-    if (-not (Is-Private $ip)) {
+    $viaTunnel = [bool]$req.Headers['CF-Connecting-IP']
+    if (-not $viaTunnel -and -not (Is-Private $ip)) {
         Send-Json $res 403 @{ error = '학교 내부망에서만 접속할 수 있습니다.' }
         return
     }
@@ -153,6 +157,30 @@ function Handle($ctx) {
     Send-Json $res 404 @{ error = '없는 주소입니다.' }
 }
 
+# 외부 접속용 터널 (cloudflared, 없으면 건너뜀)
+function Start-Tunnel {
+    if (-not (Test-Path $TunnelExe)) { return $null }
+    if (Test-Path $TunnelPidFile) {
+        $old = Get-Content $TunnelPidFile -ErrorAction SilentlyContinue
+        if ($old) { Stop-Process -Id ([int]$old) -Force -ErrorAction SilentlyContinue }
+        Remove-Item $TunnelPidFile -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path $TunnelLog) { Remove-Item $TunnelLog -Force -ErrorAction SilentlyContinue }
+    $p = Start-Process -FilePath $TunnelExe -ArgumentList @('tunnel', '--url', "http://localhost:$Port", '--no-autoupdate') -WindowStyle Hidden -RedirectStandardError $TunnelLog -PassThru
+    Set-Content -Path $TunnelPidFile -Value $p.Id
+    for ($i = 0; $i -lt 60; $i++) {
+        Start-Sleep -Milliseconds 500
+        try {
+            if (Test-Path $TunnelLog) {
+                $m = Select-String -Path $TunnelLog -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' -ErrorAction Stop | Select-Object -First 1
+                if ($m) { return $m.Matches[0].Value }
+            }
+        } catch {}
+        if ($p.HasExited) { break }
+    }
+    return $null
+}
+
 # ---------- 시작 ----------
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://+:$Port/")
@@ -166,6 +194,7 @@ try {
     exit 1
 }
 
+$TunnelUrl = Start-Tunnel
 $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -match '^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)' } |
     ForEach-Object { $_.IPAddress })
@@ -187,7 +216,17 @@ if ($schools.Count -eq 0) {
     }
 }
 Write-Host ''
-Write-Host '위 링크를 선생님들께 전달하세요. 학교 와이파이에서만 열립니다.'
+Write-Host ''
+if ($TunnelUrl) {
+    Write-Host '[다른 와이파이, 5G에서 접속하는 링크]'
+    foreach ($s in $schools) { Write-Host ($TunnelUrl + '/?code=' + $s.code) }
+} elseif (-not (Test-Path $TunnelExe)) {
+    Write-Host '외부 접속 도구가 없어 학교 안에서만 접속됩니다. 설치하기.bat을 다시 실행하면 외부 접속 링크가 만들어집니다.'
+} else {
+    Write-Host '외부 접속 링크를 만들지 못했습니다. 인터넷 연결을 확인한 뒤 서버를 다시 시작하세요.'
+}
+Write-Host ''
+Write-Host '학교 안 링크는 학교 와이파이에서만 열립니다. 외부 링크는 어디서나 열립니다.'
 Write-Host ''
 
 while ($listener.IsListening) {

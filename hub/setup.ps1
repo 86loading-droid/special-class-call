@@ -15,12 +15,12 @@ Write-Host ''
 Write-Host '=== 특수학급 비상호출 설치 ==='
 Write-Host ''
 
-Write-Host '[1/4] 학교 내부망 접속 허용 설정 중...'
+Write-Host '[1/5] 학교 내부망 접속 허용 설정 중...'
 $out = netsh http add urlacl url=http://+:8080/ sddl="D:(A;;GX;;;S-1-1-0)" 2>&1
 if ($LASTEXITCODE -eq 0) { Write-Host '      완료' }
 else { Write-Host '      이미 설정되어 있거나 확인이 필요합니다. 계속 진행합니다.' }
 
-Write-Host '[2/4] 방화벽 허용 설정 중...'
+Write-Host '[2/5] 방화벽 허용 설정 중...'
 Remove-NetFirewallRule -DisplayName '특수학급 비상호출 8080' -ErrorAction SilentlyContinue
 try {
     New-NetFirewallRule -DisplayName '특수학급 비상호출 8080' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private,Domain | Out-Null
@@ -29,7 +29,7 @@ try {
     Write-Host ('      방화벽 설정 실패: ' + $_.Exception.Message)
 }
 
-Write-Host '[3/4] 학교 등록'
+Write-Host '[3/5] 학교 등록'
 $name = (Read-Host '      학교 이름을 입력하고 Enter').Trim()
 $code = (Read-Host '      학교 코드를 입력하고 Enter (영문 대문자와 숫자 6~12자)').Trim().ToUpper()
 if (-not $name -or $code -notmatch '^[A-Z0-9]{6,12}$') {
@@ -52,7 +52,7 @@ if ($list | Where-Object { $_.code -eq $code }) {
     Write-Host ('      등록 완료: ' + $name + ' (' + $code + ')')
 }
 
-Write-Host '[4/4] 바탕화면 바로가기 만드는 중...'
+Write-Host '[4/5] 바탕화면 바로가기 만드는 중...'
 try {
     $desktop = [Environment]::GetFolderPath('Desktop')
     $ws = New-Object -ComObject WScript.Shell
@@ -64,6 +64,18 @@ try {
 } catch {
     Write-Host ('      바로가기 생성 실패: ' + $_.Exception.Message)
 }
+
+Write-Host '[5/5] 외부 접속 도구 받는 중 (인터넷 필요)...'
+$tunnelExe = Join-Path $Root 'cloudflared.exe'
+if (-not (Test-Path $tunnelExe)) {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile $tunnelExe -UseBasicParsing
+        Write-Host '      완료'
+    } catch {
+        Write-Host ('      받지 못했습니다. 나중에 설치하기.bat을 다시 실행하세요. (' + $_.Exception.Message + ')')
+    }
+} else { Write-Host '      이미 있습니다' }
 
 Write-Host ''
 Write-Host '설치가 끝났습니다.'

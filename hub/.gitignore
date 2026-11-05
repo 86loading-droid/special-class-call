@@ -1,2 +1,5 @@
 schools.json
 node_modules/
+cloudflared.exe
+tunnel.log
+tunnel.pid
